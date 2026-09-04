@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instagram Quiz Template Generator</title>
+<style>
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:#171717;color:#f5f5f5;font-family:Inter,Arial,sans-serif;
+    min-height:100vh;
+  }
+  .app{display:grid;grid-template-columns:360px 1fr;min-height:100vh}
+  .panel{
+    padding:22px;background:#202020;border-right:1px solid #333;
+    overflow:auto;
+  }
+  h1{font-size:22px;margin:0 0 5px}
+  .sub{color:#aaa;font-size:13px;margin-bottom:20px}
+  label{display:block;font-size:12px;color:#bbb;margin:14px 0 7px}
+  input[type=text], textarea, select{
+    width:100%;border:1px solid #414141;background:#151515;color:#fff;
+    border-radius:10px;padding:11px 12px;font:inherit;outline:none;
+  }
+  textarea{resize:vertical;min-height:82px}
+  input:focus,textarea:focus{border-color:#f05a00}
+  .file{
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    border:1px dashed #666;border-radius:10px;padding:13px;cursor:pointer;
+    color:#ddd;background:#181818;font-size:13px;
+  }
+  .file input{display:none}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .btn{
+    width:100%;border:0;border-radius:11px;padding:13px;margin-top:16px;
+    background:#f05a00;color:#fff;font-weight:800;font-size:14px;cursor:pointer;
+  }
+  .btn.secondary{background:#333}
+  .hint{font-size:11px;color:#888;line-height:1.5;margin-top:12px}
+  .preview{
+    display:flex;align-items:center;justify-content:center;padding:28px;
+    background:#111;overflow:auto;
+  }
+  .stage{
+    width:min(80vw,600px);aspect-ratio:4/5;position:relative;
+  }
+  canvas{width:100%;height:100%;display:block;border-radius:8px;cursor:ns-resize;touch-action:none}
+  .status{font-size:11px;color:#999;text-align:center;margin-top:10px}
+  .captionBox{width:min(80vw,600px);margin:22px auto 0;background:#202020;border:1px solid #333;border-radius:14px;padding:14px}
+  .captionHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+  .captionHeader strong{font-size:14px}
+  .captionHeader button{border:0;border-radius:9px;background:#f05a00;color:#fff;padding:10px 13px;font-weight:800;cursor:pointer}
+  .captionBox textarea{width:100%;min-height:190px;resize:vertical;border:1px solid #414141;background:#151515;color:#fff;border-radius:10px;padding:12px;font:14px/1.5 Arial,sans-serif;outline:none}
+  .captionBox textarea:focus{border-color:#f05a00}
+
+  @media(max-width:850px){
+    .app{grid-template-columns:1fr}
+    .panel{border-right:0;border-bottom:1px solid #333}
+    .preview{min-height:70vh}
+    .stage{width:min(92vw,600px)}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <h1>Quiz Post Generator</h1>
+    <div class="sub">1080 × 1350 • Instagram 4:5 • live preview</div>
+
+    <label>Header image</label>
+    <label class="file">
+      <input id="imageInput" type="file" accept="image/*">
+      <span>📷 Choose image</span>
+    </label>
+
+
+    <div id="imageControls" hidden aria-hidden="true">
+      <input id="imagePos" type="range" min="0" max="100" value="50">
+      <input id="imageZoom" type="range" min="100" max="220" value="100">
+      <span id="posValue">50%</span>
+      <span id="zoomValue">100%</span>
+      <button id="centerImage" type="button">Center image</button>
+    </div>
+
+    <label>Paste question + 4 options in ONE box</label>
+    <textarea id="allText" style="min-height:150px" placeholder="Example:
+What is the GDP of India.4 billion.5 billion.6 billion.7 billion">What is the GDP of India.4 billion.5 billion.6 billion.7 billion</textarea>
+    <div class="hint" style="margin-top:7px">
+      Just paste 5 parts separated by full stops. <b>A, B, C and D are added automatically.</b><br>
+      Example: <b>What is the GDP of India.4 billion.5 billion.6 billion.7 billion</b>
+    </div>
+
+    <label>Footer text</label>
+    <input id="footer" type="text" value="Check answer in the pinned comment">
+
+    <label>Gemini API key <span style="color:#888">(saved only in this browser)</span></label>
+    <input id="apiKey" type="password" placeholder="Paste your Gemini API key once">
+    <div id="captionStatus" class="hint" aria-live="polite"></div>
+
+    <div class="row">
+      <div>
+        <label>Image fit</label>
+        <select id="fit">
+          <option value="cover">Fill / Crop</option>
+          <option value="contain">Fit entire image</option>
+        </select>
+      </div>
+      <div>
+        <label>Accent</label>
+        <select id="accent">
+          <option value="orange">Orange</option>
+          <option value="green">Green</option>
+          <option value="blue">Blue</option>
+          <option value="gold">Gold</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn" id="download">Download 1080 × 1350 PNG</button>
+    <button class="btn secondary" id="clear">Reset text</button>
+    <button class="btn secondary" id="copyCaption" type="button">Copy Caption</button>
+    <div class="hint">
+      Everything is generated in your browser. No upload is sent to a server.
+      Long questions and option text automatically reduce their font size and wrap to stay inside the design. Paste the complete question and options into one box.
+    </div>
+  </aside>
+
+  <main class="preview">
+    <div>
+      <div class="stage"><canvas id="canvas" width="1080" height="1350"></canvas></div>
+      <div class="status">Preview is the exact 4:5 canvas ratio.</div>
+
+      <section class="captionBox">
+        <div class="captionHeader">
+          <strong>Instagram Caption</strong>
+        </div>
+        <textarea id="caption" placeholder="Your generated caption will appear here. You can edit it before copying."></textarea>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+const W=1080,H=1350;
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+const $=id=>document.getElementById(id);
+let img=null;
+const savedKey = localStorage.getItem('gemini_api_key');
+let imagePos=50;
+let imageZoom=100;
+let draggingImage=false;
+let dragStartY=0;
+let dragStartPos=50;
+
+const accents={
+  orange:{main:'#ef5b09',soft:'#fff0e3',bg:'#fffaf5'},
+  green:{main:'#075a37',soft:'#e7f4ea',bg:'#f7fcf8'},
+  blue:{main:'#1659a8',soft:'#e7effb',bg:'#f7faff'},
+  gold:{main:'#d79b00',soft:'#fff4c9',bg:'#fffdf3'}
+};
+
+function roundedRect(x,y,w,h,r,fill,stroke=null,lw=1){
+  ctx.beginPath();
+  ctx.roundRect(x,y,w,h,r);
+  if(fill){ctx.fillStyle=fill;ctx.fill();}
+  if(stroke){ctx.lineWidth=lw;ctx.strokeStyle=stroke;ctx.stroke();}
+}
+
+function fitFont(text,maxWidth,start,min,font='800'){
+  let s=start;
+  while(s>min){
+    ctx.font=`${font} ${s}px Arial`;
+    if(ctx.measureText(text).width<=maxWidth)return s;
+    s-=1;
+  }
+  return min;
+}
+
+function wrap(text,maxWidth,font){
+  ctx.font=font;
+  const words=text.trim().split(/\s+/);
+  const lines=[]; let line='';
+  for(const word of words){
+    const test=line?line+' '+word:word;
+    if(ctx.measureText(test).width<=maxWidth || !line) line=test;
+    else {lines.push(line);line=word;}
+  }
+  if(line)lines.push(line);
+  return lines;
+}
+
+function drawImageCover(image,x,y,w,h,fit='cover'){
+  ctx.save();
+  ctx.beginPath();ctx.roundRect(x,y,w,h,34);ctx.clip();
+  ctx.fillStyle='#ddd';ctx.fillRect(x,y,w,h);
+
+  const ir=image.width/image.height, br=w/h;
+  let baseW,baseH;
+  if(fit==='contain'){
+    if(ir>br){baseW=w;baseH=w/ir;}else{baseH=h;baseW=h*ir;}
+  }else{
+    if(ir>br){baseH=h;baseW=h*ir;}else{baseW=w;baseH=w/ir;}
+  }
+
+  const zoom=imageZoom/100;
+  const dw=baseW*zoom, dh=baseH*zoom;
+  const dx=x+(w-dw)/2;
+
+  // 0% = top, 50% = center, 100% = bottom.
+  const maxOffset=Math.max(0,dh-h);
+  const dy=y-(maxOffset*(imagePos/100));
+
+  ctx.drawImage(image,dx,dy,dw,dh);
+  ctx.restore();
+}
+
+function drawPin(x,y,color){
+  ctx.save();ctx.fillStyle=color;
+  ctx.beginPath();ctx.arc(x,y-11,11,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.moveTo(x-7,y-5);ctx.lineTo(x+7,y-5);ctx.lineTo(x+4,y+10);
+  ctx.lineTo(x,y+18);ctx.lineTo(x-4,y+10);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+function draw(){
+  const a=accents[$('accent').value];
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=a.bg;ctx.fillRect(0,0,W,H);
+
+  // Outer frame
+  roundedRect(15,15,1050,1320,42,a.bg,a.main,7);
+
+  // Image
+  const ix=28,iy=28,iw=1024,ih=575;
+  if(img) drawImageCover(img,ix,iy,iw,ih,$('fit').value);
+  else{
+    roundedRect(ix,iy,iw,ih,34,'#e8e8e8');
+    ctx.fillStyle='#777';ctx.font='600 28px Arial';ctx.textAlign='center';
+    ctx.fillText('Choose a header image',W/2,iy+ih/2);
+  }
+
+  // Question block
+  const parsed = parseQuiz($('allText').value);
+  const q = parsed.question || 'Your question goes here';
+  const maxQ=940;
+  let qSize=70, qLines;
+  while(qSize>=42){
+    qLines=wrap(q,maxQ,`800 ${qSize}px Arial`);
+    if(qLines.length<=3 && qLines.every(line=>ctx.measureText(line).width<=maxQ))break;
+    qSize--;
+  }
+  const qLineH=qSize*1.12;
+  let qY=690;
+  ctx.textAlign='center';
+  ctx.fillStyle='#101010';
+  // Highlight important phrase visually without needing markup:
+  // first line(s) black; if 2+ lines, color the last line with accent.
+  qLines.forEach((line,i)=>{
+    ctx.font=`800 ${qSize}px Arial`;
+    ctx.fillStyle=(i===qLines.length-1 && qLines.length>1)?a.main:'#101010';
+    ctx.fillText(line,W/2,qY+i*qLineH);
+  });
+
+  // Options
+  const labels=['A.','B.','C.','D.'];
+  const opts = parsed.options;
+  const boxes=[
+    [45,850,475,128],[560,850,475,128],
+    [45,992,475,128],[560,992,475,128]
+  ];
+  boxes.forEach((b,i)=>{
+    roundedRect(...b,24,a.soft);
+    const [x,y,w,h]=b;
+    let size=48;
+    while(size>28){
+      ctx.font=`800 ${size}px Arial`;
+      if(ctx.measureText(opts[i]||'Option').width<=w-125)break;
+      size--;
+    }
+    ctx.textAlign='left';
+    ctx.fillStyle=a.main;ctx.font=`800 ${size}px Arial`;
+    ctx.fillText(labels[i],x+55,y+80);
+    ctx.fillStyle='#101010';ctx.font=`800 ${size}px Arial`;
+    ctx.fillText(opts[i]||'Option',x+150,y+80);
+  });
+
+  // Footer
+  roundedRect(43,1150,994,145,31,a.main);
+  const footer=$('footer').value.trim() || 'Check answer in the pinned comment';
+  let fs=38;
+  while(fs>24){
+    ctx.font=`800 ${fs}px Arial`;
+    if(ctx.measureText(footer).width<=770)break;
+    fs--;
+  }
+  ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font=`800 ${fs}px Arial`;
+  ctx.fillText(footer,525,1238);
+  ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(930,1200);ctx.lineTo(930,1260);ctx.stroke();
+  drawPin(972,1235,'#fff');
+
+}
+
+
+if(savedKey) $('apiKey').value=savedKey;
+
+$('apiKey').addEventListener('change',()=>{
+  const key=$('apiKey').value.trim();
+  if(key) localStorage.setItem('gemini_api_key',key);
+});
+
+$('copyCaption').addEventListener('click',async()=>{
+  const text=$('caption').value;
+  if(!text)return;
+  try{
+    await navigator.clipboard.writeText(text);
+    $('copyCaption').textContent='Copied!';
+    setTimeout(()=>$('copyCaption').textContent='Copy Caption',1200);
+  }catch(e){
+    $('caption').select();
+    document.execCommand('copy');
+    $('copyCaption').textContent='Copied!';
+    setTimeout(()=>$('copyCaption').textContent='Copy Caption',1200);
+  }
+});
+
+async function generateCaption(){
+  const key=$('apiKey').value.trim();
+  if(!key){
+    $('captionStatus').textContent='Paste your Gemini API key once. It will be saved in this browser.';
+    $('apiKey').focus();
+    return false;
+  }
+  localStorage.setItem('gemini_api_key',key);
+
+  const parsed=parseQuiz($('allText').value);
+  if(!parsed.question || parsed.options.some(x=>!x)){
+    $('captionStatus').textContent='Enter one question followed by four options, separated by full stops.';
+    return false;
+  }
+
+  const prompt=`You are an expert Instagram content writer for Indian competitive-exam and GK quiz pages.
+
+Write a natural, human-like Instagram caption for this quiz.
+
+Question: ${parsed.question}
+Options:
+A. ${parsed.options[0]}
+B. ${parsed.options[1]}
+C. ${parsed.options[2]}
+D. ${parsed.options[3]}
+
+Requirements:
+- Do NOT reveal or hint at the correct answer.
+- Make people want to guess before checking the pinned comment.
+- Sound like a real Indian educational Instagram creator, not an AI.
+- Keep it concise and engaging.
+- Avoid generic repetitive phrases such as "Test your knowledge", "Challenge yourself", or "Are you ready?" unless genuinely natural.
+- Add a natural call to action to comment/guess and check the pinned comment.
+- Then add 8-12 highly relevant hashtags on a separate line.
+- Include relevant hashtags for competitive exams, GK, banking awareness, SBI PO, IBPS PO, SSC or the appropriate exam topic when relevant.
+- Do not use markdown headings or quotation marks around the caption.
+- Return only the caption and hashtags.`;
+
+  $('captionStatus').textContent='Generating caption + hashtags...';
+
+  try{
+    const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key='+encodeURIComponent(key),{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+    });
+
+    const data=await response.json();
+    if(!response.ok) throw new Error(data?.error?.message || 'Gemini request failed');
+
+    const text=data?.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('').trim();
+    if(!text) throw new Error('Gemini returned an empty response.');
+
+    $('caption').value=text;
+    $('captionStatus').textContent='Caption generated. You can edit it before copying.';
+    return true;
+  }catch(err){
+    $('captionStatus').textContent='Error: '+err.message;
+    return false;
+  }
+}
+
+function parseQuiz(raw){
+  raw = raw.trim().replace(/\r?\n/g,' ').replace(/\s+/g,' ');
+  if(!raw) return {question:'',options:['','','','']};
+
+  // Main format: Question. Option 1. Option 2. Option 3. Option 4
+  // A/B/C/D are generated by the template, so the user never needs to type them.
+  const parts = raw.split(/\.\s*/).map(x=>x.trim()).filter(Boolean);
+
+  if(parts.length >= 5){
+    return {
+      question: parts[0],
+      options: parts.slice(1,5).map(x=>x.replace(/^[A-D][.)]\s*/i,'').trim())
+    };
+  }
+
+  // Also accept the older A. B. C. D. format if pasted from somewhere else.
+  const labeled = raw.match(/^(.*?)\s*A\.\s*(.*?)\s*B\.\s*(.*?)\s*C\.\s*(.*?)\s*D\.\s*(.*)$/i);
+  if(labeled){
+    return {
+      question:labeled[1].replace(/[.\s]+$/,'').trim(),
+      options:[
+        labeled[2].replace(/[.\s]+$/,'').trim(),
+        labeled[3].replace(/[.\s]+$/,'').trim(),
+        labeled[4].replace(/[.\s]+$/,'').trim(),
+        labeled[5].replace(/[.\s]+$/,'').trim()
+      ]
+    };
+  }
+
+  return {question:raw,options:['','','','']};
+}
+
+['allText','footer','fit','accent'].forEach(id=>{
+  $(id).addEventListener('input',draw);
+  $(id).addEventListener('change',draw);
+});
+
+$('imageInput').addEventListener('change',e=>{
+  const file=e.target.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const im=new Image();
+    im.onload=()=>{img=im;draw();};
+    im.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+$('download').addEventListener('click',async()=>{
+  const generated=await generateCaption();
+  if(!generated)return;
+  draw();
+  const a=document.createElement('a');
+  a.download='instagram-quiz-1080x1350.png';
+  a.href=canvas.toDataURL('image/png',1);
+  a.click();
+});
+
+
+$('imagePos').addEventListener('input',e=>{
+  imagePos=Number(e.target.value);
+  $('posValue').textContent=imagePos+'%';
+  draw();
+});
+$('imageZoom').addEventListener('input',e=>{
+  imageZoom=Number(e.target.value);
+  $('zoomValue').textContent=imageZoom+'%';
+  draw();
+});
+$('centerImage').addEventListener('click',()=>{
+  imagePos=50; imageZoom=100;
+  $('imagePos').value=50; $('imageZoom').value=100;
+  $('posValue').textContent='50%'; $('zoomValue').textContent='100%';
+  draw();
+});
+
+const IMAGE_BOX={x:28,y:28,w:1024,h:575};
+
+function pointerIsInsideImageBox(e){
+  const rect=canvas.getBoundingClientRect();
+  const x=(e.clientX-rect.left)*(W/rect.width);
+  const y=(e.clientY-rect.top)*(H/rect.height);
+  return x>=IMAGE_BOX.x && x<=IMAGE_BOX.x+IMAGE_BOX.w &&
+         y>=IMAGE_BOX.y && y<=IMAGE_BOX.y+IMAGE_BOX.h;
+}
+
+canvas.addEventListener('pointerdown',e=>{
+  if(!img || !pointerIsInsideImageBox(e)) return;
+  draggingImage=true;
+  dragStartY=e.clientY;
+  dragStartPos=imagePos;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove',e=>{
+  if(!draggingImage || !img) return;
+  const rect=canvas.getBoundingClientRect();
+  const delta=(e.clientY-dragStartY)/rect.height*100;
+  imagePos=Math.max(0,Math.min(100,dragStartPos-delta));
+  // Hidden controls remain the internal state; no visible position/zoom UI.
+  const posControl=$('imagePos');
+  const posValue=$('posValue');
+  if(posControl) posControl.value=Math.round(imagePos);
+  if(posValue) posValue.textContent=Math.round(imagePos)+'%';
+  draw();
+});
+canvas.addEventListener('pointerup',e=>{
+  draggingImage=false;
+  try{canvas.releasePointerCapture(e.pointerId)}catch(_){}
+});
+canvas.addEventListener('pointercancel',()=>draggingImage=false);
+
+
+$('clear').addEventListener('click',()=>{
+  $('allText').value='';
+  $('footer').value='Check answer in the pinned comment';
+  imagePos=50; imageZoom=100;
+  $('imagePos').value=50; $('imageZoom').value=100;
+  $('posValue').textContent='50%'; $('zoomValue').textContent='100%';
+  draw();
+});
+
+</script>
+</body>
+</html>
